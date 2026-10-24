@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1d2340">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="タグ辞書">
+<title>Danbooruタグ辞書</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: sticky search bar on top, tag list in the middle, prompt tray fixed at the bottom, wiki in a bottom sheet. */
+:root{
+  --bg:#f3f4f9; --surface:#ffffff; --ink:#1b1f33; --muted:#666c88; --line:#dde0ec;
+  --accent:#4a55c9; --accent-ink:#ffffff; --bar:#1d2340; --bar-ink:#eef0ff; --bar-muted:#a5abd4;
+  --c-general:#2f6fd6; --c-artist:#c8323a; --c-copyright:#9a3fbf; --c-character:#1f8a4c; --c-meta:#c97a0c;
+  --font-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --font-tag:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --radius:12px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111427; --surface:#1a1e36; --ink:#e8eaf6; --muted:#9aa0c4; --line:#2b3052;
+    --accent:#8c95ff; --accent-ink:#0f1226; --bar:#0b0d1c; --bar-ink:#eef0ff; --bar-muted:#8f95c0;
+    --c-general:#6fa4ff; --c-artist:#ff7a7f; --c-copyright:#d08cf2; --c-character:#5fd394; --c-meta:#f2b04f;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111427; --surface:#1a1e36; --ink:#e8eaf6; --muted:#9aa0c4; --line:#2b3052;
+  --accent:#8c95ff; --accent-ink:#0f1226; --bar:#0b0d1c; --bar-ink:#eef0ff; --bar-muted:#8f95c0;
+  --c-general:#6fa4ff; --c-artist:#ff7a7f; --c-copyright:#d08cf2; --c-character:#5fd394; --c-meta:#f2b04f;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bar);z-index:30}
+
+/* Header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bar);color:var(--bar-ink);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 14px}
+.brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px}
+.brand h1{margin:0;font-size:17px;font-weight:700;letter-spacing:.02em}
+.brand small{color:var(--bar-muted);font-size:12px}
+.searchbox{position:relative}
+.searchbox input{width:100%;font:inherit;font-size:16px;padding:12px 44px 12px 14px;border-radius:var(--radius);border:1px solid transparent;
+  background:var(--surface);color:var(--ink);outline:none}
+.searchbox input:focus{border-color:var(--accent)}
+.clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:34px;height:34px;border:0;border-radius:50%;background:transparent;color:var(--muted);font-size:18px;cursor:pointer}
+.hint{margin:8px 0 0;font-size:12px;color:var(--bar-muted)}
+
+/* Results */
+main{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px calc(var(--tray-h,120px) + 24px)}
+.status{color:var(--muted);font-size:13px;margin:4px 2px 10px}
+.status.err{color:var(--c-artist)}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.row{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.row-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;text-align:left;background:transparent;border:0;padding:10px 12px;cursor:pointer}
+.row-main:focus-visible,.add:focus-visible,.btn:focus-visible,.chip:focus-visible,.wiki a:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.tagname{font-family:var(--font-tag);font-size:14.5px;font-weight:600;overflow-wrap:anywhere;color:var(--cat)}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:12px;color:var(--muted)}
+.cat{display:inline-flex;align-items:center;gap:5px}
+.cat::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--cat)}
+.count{font-variant-numeric:tabular-nums}
+.alias{overflow-wrap:anywhere}
+.add{flex:0 0 52px;border:0;border-left:1px solid var(--line);background:transparent;font-size:22px;color:var(--accent);cursor:pointer}
+.add.on{background:var(--accent);color:var(--accent-ink)}
+.k0{--cat:var(--c-general)} .k1{--cat:var(--c-artist)} .k3{--cat:var(--c-copyright)} .k4{--cat:var(--c-character)} .k5{--cat:var(--c-meta)}
+
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);margin:2px 2px 12px}
+.examples{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.ex{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-family:var(--font-tag);font-size:13px;cursor:pointer}
+
+/* Tray */
+.tray{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--bar);color:var(--bar-ink);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:10px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));box-shadow:0 -6px 24px rgba(0,0,0,.18)}
+.tray-head{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.tray-title{font-size:13px;font-weight:700;letter-spacing:.04em}
+.tray-title span{color:var(--bar-muted);font-weight:400;margin-left:4px}
+.toggle{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--bar-ink);cursor:pointer;user-select:none}
+.toggle input{width:18px;height:18px;accent-color:var(--accent)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:8px 0 4px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:var(--bar-ink);
+  border-radius:999px;padding:5px 6px 5px 11px;font-family:var(--font-tag);font-size:12.5px;cursor:pointer;max-width:80vw}
+.chip b{font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip i{font-style:normal;width:20px;height:20px;display:grid;place-items:center;border-radius:50%;background:rgba(255,255,255,.12);font-size:12px}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--cat);flex:0 0 auto}
+.preview{font-family:var(--font-tag);font-size:12px;color:var(--bar-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:2px 0 8px;min-height:1.5em}
+.tray-actions{display:flex;gap:8px}
+.btn{border:0;border-radius:10px;padding:11px 14px;font-weight:700;font-size:14px;cursor:pointer}
+.btn-primary{flex:1;background:var(--accent);color:var(--accent-ink)}
+.btn-ghost{background:rgba(255,255,255,.1);color:var(--bar-ink)}
+.btn:disabled{opacity:.45;cursor:default}
+
+/* Sheet */
+.scrim{position:fixed;inset:0;background:rgba(10,12,28,.5);z-index:40}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;max-height:88%;display:flex;flex-direction:column;background:var(--surface);color:var(--ink);
+  border-radius:18px 18px 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.3);max-width:760px;margin:0 auto}
+.sheet-head{padding:14px max(18px,env(safe-area-inset-right,0px)) 12px max(18px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
+.sheet-head .t{flex:1;min-width:0}
+.sheet-head h2{margin:0;font-family:var(--font-tag);font-size:17px;overflow-wrap:anywhere;color:var(--cat,var(--ink))}
+.close{flex:0 0 auto;width:36px;height:36px;border-radius:50%;border:0;background:var(--bg);font-size:18px;cursor:pointer;color:var(--ink)}
+.sheet-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px max(18px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px))}
+.sheet-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.sheet-actions .btn{padding:9px 12px;font-size:13px}
+.sheet-actions .btn-primary{flex:0 0 auto}
+.btn-line{background:transparent;border:1px solid var(--line);color:var(--ink);text-decoration:none;display:inline-flex;align-items:center}
+.label{font-size:11.5px;letter-spacing:.08em;color:var(--muted);margin:0 0 6px;font-weight:700}
+.names{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.names span{background:var(--bg);border-radius:6px;padding:3px 8px;font-size:13px}
+.wiki{font-size:14.5px;max-width:65ch;overflow-wrap:anywhere}
+.wiki h3,.wiki h4,.wiki h5{font-size:15px;margin:1.2em 0 .4em}
+.wiki p{margin:.5em 0}
+.wiki ul{margin:.4em 0;padding-left:1.3em}
+.wiki a{color:var(--accent);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent) 40%,transparent)}
+.wiki a.tag{font-family:var(--font-tag);font-size:.92em}
+.wiki blockquote{margin:.6em 0;padding:.4em .8em;border-left:3px solid var(--line);color:var(--muted)}
+.wiki details{margin:.6em 0;border:1px solid var(--line);border-radius:8px;padding:.4em .8em}
+.wiki summary{cursor:pointer;font-weight:700}
+.wiki .spoiler{background:var(--ink);color:var(--ink);border-radius:3px}
+.wiki .spoiler:active,.wiki .spoiler:focus{color:var(--surface)}
+.empty-wiki{color:var(--muted);font-size:14px}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tray-h,120px) + 14px);z-index:50;background:var(--ink);color:var(--bg);
+  padding:9px 16px;border-radius:999px;font-size:13px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+@media (prefers-reduced-motion:no-preference){
+  .sheet{animation:up .22s ease-out}
+  @keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><h1>Danbooruタグ辞書</h1><small>NovelAI用コピー対応</small></div>
+  <div class="searchbox">
+    <input id="q" type="search" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="タグを検索（例: blue eyes / 猫耳）">
+    <button class="clear" id="clear" type="button" aria-label="入力を消す" hidden>✕</button>
+  </div>
+  <p class="hint">英語は単語の一部でもOK。日本語名でも探せます。</p>
+</header>
+
+<main>
+  <div class="legend" aria-label="色の意味">
+    <span class="cat k0">一般</span><span class="cat k4">キャラ</span><span class="cat k3">作品</span><span class="cat k1">絵師</span><span class="cat k5">メタ</span>
+  </div>
+  <p class="status" id="status"></p>
+  <ul class="list" id="list"></ul>
+  <div id="intro">
+    <p class="status">試しにタップしてみてください。</p>
+    <div class="examples">
+      <button class="ex" type="button">long_hair</button>
+      <button class="ex" type="button">school_uniform</button>
+      <button class="ex" type="button">猫耳</button>
+      <button class="ex" type="button">looking_at_viewer</button>
+      <button class="ex" type="button">sunset</button>
+    </div>
+  </div>
+</main>
+
+<section class="tray" id="tray" aria-label="選んだタグ">
+  <div class="tray-head">
+    <div class="tray-title">選んだタグ<span id="n">0件</span></div>
+    <label class="toggle"><input id="opt-us" type="checkbox" checked>アンダーバー → スペース</label>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="preview" id="preview">＋を押すとここにタグがたまります</div>
+  <div class="tray-actions">
+    <button class="btn btn-ghost" id="reset" type="button" disabled>全部消す</button>
+    <button class="btn btn-primary" id="copy" type="button" disabled>コピー</button>
+  </div>
+</section>
+
+<div class="scrim" id="scrim" hidden></div>
+<section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="s-title" hidden>
+  <div class="sheet-head">
+    <div class="t">
+      <h2 id="s-title"></h2>
+      <div class="meta" id="s-meta"></div>
+    </div>
+    <button class="close" id="s-close" type="button" aria-label="閉じる">✕</button>
+  </div>
+  <div class="sheet-body">
+    <div class="sheet-actions" id="s-actions"></div>
+    <div id="s-names-wrap" hidden><p class="label">ほかの呼び名</p><div class="names" id="s-names"></div></div>
+    <p class="label">説明（Danbooru Wiki）</p>
+    <div class="wiki" id="s-wiki"></div>
+  </div>
+</section>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function(){
+  "use strict";
+  var API = "https://danbooru.donmai.us";
+  var CAT = {0:"一般",1:"絵師",3:"作品",4:"キャラ",5:"メタ"};
+  var $ = function(id){ return document.getElementById(id); };
+  var q=$("q"), list=$("list"), statusEl=$("status"), intro=$("intro");
+  var chipsEl=$("chips"), preview=$("preview"), nEl=$("n"), copyBtn=$("copy"), resetBtn=$("reset"), optUs=$("opt-us");
+
+  /* ---------- storage (best effort) ---------- */
+  function load(k, d){ try{ var v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
+  function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+
+  var picked = load("dtd.picked", []);   // [{name, category}]
+  optUs.checked = load("dtd.us", true);
+
+  /* ---------- formatting ---------- */
+  // NovelAI: underscores to spaces. Short emoticon tags (^_^, o_o, >_<) keep their underscores.
+  function forNai(name){
+    if (!optUs.checked) return name;
+    if (name.length <= 3) return name;
+    return name.replace(/_/g, " ");
+  }
+  function display(name){ return optUs.checked && name.length > 3 ? name.replace(/_/g," ") : name; }
+  function fmtCount(n){
+    if (n >= 1e6) return (n/1e6).toFixed(n>=1e7?0:1).replace(/\.0$/,"") + "M";
+    if (n >= 1e3) return (n/1e3).toFixed(n>=1e4?0:1).replace(/\.0$/,"") + "k";
+    return String(n);
+  }
+  function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function normTag(s){ return s.trim().toLowerCase().replace(/\s+/g,"_"); }
+
+  /* ---------- network ---------- */
+  function getJSON(path){
+    return fetch(API + path, {headers:{"Accept":"application/json"}}).then(function(r){
+      if (!r.ok) { var e = new Error("HTTP " + r.status); e.status = r.status; throw e; }
+      return r.json();
+    });
+  }
+
+  /* ---------- search ---------- */
+  var timer=null, seq=0, lastResults=[];
+  function search(text){
+    var term = text.trim();
+    $("clear").hidden = !term;
+    if (!term){ list.innerHTML=""; statusEl.textContent=""; statusEl.className="status"; intro.hidden=false; return; }
+    intro.hidden = true;
+    var my = ++seq;
+    statusEl.className="status"; statusEl.textContent="検索中…";
+    var query = /[^\x00-\x7F]/.test(term) ? term : normTag(term);
+    getJSON("/autocomplete.json?search[query]=" + encodeURIComponent(query) + "&search[type]=tag_query&limit=20")
+      .then(function(rows){
+        if (my !== seq) return;
+        lastResults = (rows||[]).filter(function(r){ return r && r.value && /^tag/.test(r.type||"tag"); });
+        render();
+        statusEl.textContent = lastResults.length ? lastResults.length + "件（投稿数の多い順）" : "見つかりませんでした。綴りを変えるか、* を付けて試してください（例: blue*）";
+      })
+      .catch(function(err){
+        if (my !== seq) return;
+        list.innerHTML="";
+        statusEl.className="status err";
+        statusEl.textContent = err && err.status === 429 ? "検索が多すぎるため少し待ってから試してください。" : "Danbooruに接続できませんでした。通信状態を確認して、もう一度入力してください。";
+      });
+  }
+  function isPicked(name){ return picked.some(function(p){ return p.name===name; }); }
+  function render(){
+    list.innerHTML = lastResults.map(function(r, i){
+      var c = r.category in CAT ? r.category : 0;
+      var alias = r.antecedent ? '<span class="alias">← ' + esc(r.antecedent) + '</span>' : "";
+      var on = isPicked(r.value);
+      return '<li class="row k'+c+'">' +
+        '<button class="row-main" type="button" data-i="'+i+'">' +
+          '<span class="tagname">'+esc(display(r.value))+'</span>' +
+          '<span class="meta"><span class="cat">'+CAT[c]+'</span><span class="count">'+fmtCount(r.post_count||0)+' 件</span>'+alias+'</span>' +
+        '</button>' +
+        '<button class="add'+(on?' on':'')+'" type="button" data-add="'+i+'" aria-label="'+esc(r.value)+' を'+(on?'外す':'追加')+'">'+(on?'✓':'＋')+'</button>' +
+      '</li>';
+    }).join("");
+  }
+  q.addEventListener("input", function(){ clearTimeout(timer); var v=q.value; timer=setTimeout(function(){ search(v); }, 260); });
+  q.addEventListener("keydown", function(e){ if (e.key==="Enter"){ clearTimeout(timer); search(q.value); q.blur(); } });
+  $("clear").addEventListener("click", function(){ q.value=""; search(""); q.focus(); });
+  intro.addEventListener("click", function(e){ var b=e.target.closest(".ex"); if(!b) return; q.value=b.textContent; search(q.value); });
+  list.addEventListener("click", function(e){
+    var add = e.target.closest("[data-add]");
+    if (add){ var r=lastResults[+add.dataset.add]; toggle(r.value, r.category); return; }
+    var row = e.target.closest("[data-i]");
+    if (row){ var t=lastResults[+row.dataset.i]; openSheet(t.value, {category:t.category, post_count:t.post_count}); }
+  });
+
+  /* ---------- tray ---------- */
+  function toggle(name, category){
+    if (isPicked(name)) picked = picked.filter(function(p){ return p.name!==name; });
+    else picked.push({name:name, category: category in CAT ? category : 0});
+    save("dtd.picked", picked);
+    renderTray(); render(); if (!$("sheet").hidden) renderSheetActions();
+  }
+  function output(){ return picked.map(function(p){ return forNai(p.name); }).join(", "); }
+  function renderTray(){
+    chipsEl.innerHTML = picked.map(function(p, i){
+      return '<button class="chip k'+p.category+'" type="button" data-rm="'+i+'" aria-label="'+esc(p.name)+' を外す"><b>'+esc(display(p.name))+'</b><i>✕</i></button>';
+    }).join("");
+    chipsEl.hidden = !picked.length;
+    nEl.textContent = picked.length + "件";
+    preview.textContent = picked.length ? output() : "＋を押すとここにタグがたまります";
+    copyBtn.disabled = resetBtn.disabled = !picked.length;
+    resetBtn.textContent = "全部消す";
+    requestAnimationFrame(function(){ document.documentElement.style.setProperty("--tray-h", $("tray").offsetHeight + "px"); });
+  }
+  chipsEl.addEventListener("click", function(e){ var c=e.target.closest("[data-rm]"); if(c){ var p=picked[+c.dataset.rm]; toggle(p.name, p.category); } });
+  optUs.addEventListener("change", function(){ save("dtd.us", optUs.checked); renderTray(); render(); });
+  var resetArmed=false;
+  resetBtn.addEventListener("click", function(){
+    if (!resetArmed){ resetArmed=true; resetBtn.textContent="もう一度で消去"; setTimeout(function(){ resetArmed=false; resetBtn.textContent="全部消す"; }, 2500); return; }
+    resetArmed=false; picked=[]; save("dtd.picked", picked); renderTray(); render();
+  });
+  copyBtn.addEventListener("click", function(){ copyText(output(), "コピーしました"); });
+
+  function copyText(text, msg){
+    function fallback(){
+      var ta=document.createElement("textarea"); ta.value=text; ta.setAttribute("readonly",""); ta.style.position="fixed"; ta.style.opacity="0";
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+      var ok=false; try{ ok=document.execCommand("copy"); }catch(e){}
+      document.body.removeChild(ta);
+      toast(ok ? msg : "コピーできませんでした。下の文字を長押ししてコピーしてください");
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ toast(msg); }, fallback);
+    } else fallback();
+  }
+  var toastTimer=null;
+  function toast(msg){ var t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.hidden=true; }, 1800); }
+
+  /* ---------- DText (Danbooru wiki markup) → HTML ---------- */
+  function inline(s){
+    s = esc(s);
+    // [[tag|label]] and [[tag]]
+    s = s.replace(/\[\[([^\]|]+)\|([^\]]*)\]\]/g, function(_, t, l){ return tagLink(t, l || t); });
+    s = s.replace(/\[\[([^\]]+)\]\]/g, function(_, t){ return tagLink(t, t); });
+    // {{tag search}}
+    s = s.replace(/\{\{([^}]+)\}\}/g, function(_, t){ return '<a class="tag" href="'+API+'/posts?tags='+encodeURIComponent(t.replace(/&amp;/g,"&"))+'" target="_blank" rel="noopener">'+t+'</a>'; });
+    // "label":url and "label":[url]
+    s = s.replace(/&quot;([^&]+?)&quot;:\[([^\]\s]+)\]/g, function(_, l, u){ return extLink(u, l); });
+    s = s.replace(/&quot;([^&]+?)&quot;:((?:https?:\/\/|\/)[^\s<]+)/g, function(_, l, u){ return extLink(u, l); });
+    // <url|label>, bare urls
+    s = s.replace(/&lt;(https?:\/\/[^|&]+)\|([^&]+)&gt;/g, function(_, u, l){ return extLink(u, l); });
+    s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, function(_, pre, u){ return pre + extLink(u, u); });
+    // simple styles
+    s = s.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, "<strong>$1</strong>")
+         .replace(/\[i\]([\s\S]*?)\[\/i\]/gi, "<em>$1</em>")
+         .replace(/\[u\]([\s\S]*?)\[\/u\]/gi, "<u>$1</u>")
+         .replace(/\[s\]([\s\S]*?)\[\/s\]/gi, "<s>$1</s>")
+         .replace(/\[spoilers?\]([\s\S]*?)\[\/spoilers?\]/gi, '<span class="spoiler" tabindex="0">$1</span>')
+         .replace(/\[tn\]([\s\S]*?)\[\/tn\]/gi, "<small>$1</small>")
+         .replace(/\[\/?(code|nodtext|table|thead|tbody|tr|td|th|url|color[^\]]*)\]/gi, " ");
+    // post #123 / topic #12 etc.
+    s = s.replace(/\b(post|pool|topic|forum|comment|artist|wiki|user) #(\d+)\b/gi, function(m, kind, id){
+      var path = {post:"posts",pool:"pools",topic:"forum_topics",forum:"forum_posts",comment:"comments",artist:"artists",wiki:"wiki_pages",user:"users"}[kind.toLowerCase()];
+      return extLink(API + "/" + path + "/" + id, m);
+    });
+    return s;
+  }
+  function tagLink(t, l){
+    var raw = t.replace(/&amp;/g,"&").replace(/&#39;/g,"'").replace(/&quot;/g,'"');
+    var name = normTag(raw.replace(/#.*$/,""));
+    return '<a class="tag" href="#" data-tag="'+esc(name)+'">'+l+'</a>';
+  }
+  function extLink(u, l){
+    var url = u.replace(/&amp;/g,"&");
+    if (url.charAt(0)==="/") url = API + url;
+    if (!/^https?:\/\//.test(url)) return l;
+    return '<a href="'+esc(url)+'" target="_blank" rel="noopener">'+l+'</a>';
+  }
+  function dtext(src){
+    var text = String(src||"").replace(/\r\n?/g,"\n");
+    // expand blocks → details
+    text = text.replace(/\[expand(?:=([^\]]*))?\]/gi, function(_, t){ return "\n\u0001EXP\u0002"+(t||"詳しく")+"\n"; })
+               .replace(/\[\/expand\]/gi, "\n\u0001/EXP\n")
+               .replace(/\[quote\]/gi, "\n\u0001Q\n").replace(/\[\/quote\]/gi, "\n\u0001/Q\n");
+    var out=[], para=[], inList=false;
+    function flush(){ if (para.length){ out.push("<p>"+para.map(inline).join("<br>")+"</p>"); para=[]; } }
+    function endList(){ if (inList){ out.push("</ul>"); inList=false; } }
+    text.split("\n").forEach(function(line){
+      var m;
+      if (line.indexOf("\u0001EXP\u0002")===0){ flush(); endList(); out.push("<details><summary>"+inline(line.slice(5))+"</summary>"); return; }
+      if (line==="\u0001/EXP"){ flush(); endList(); out.push("</details>"); return; }
+      if (line==="\u0001Q"){ flush(); endList(); out.push("<blockquote>"); return; }
+      if (line==="\u0001/Q"){ flush(); endList(); out.push("</blockquote>"); return; }
+      if ((m = line.match(/^h([1-6])(?:#[\w-]+)?\.\s*(.*)$/i))){ flush(); endList(); var lv=Math.min(5, Math.max(3, +m[1]+1)); out.push("<h"+lv+">"+inline(m[2])+"</h"+lv+">"); return; }
+      if ((m = line.match(/^\s*(\*+)\s+(.*)$/))){ flush(); if(!inList){ out.push("<ul>"); inList=true; } out.push("<li>"+inline(m[2])+"</li>"); return; }
+      if (!line.trim()){ flush(); endList(); return; }
+      endList(); para.push(line);
+    });
+    flush(); endList();
+    return out.join("");
+  }
+
+  /* ---------- detail sheet ---------- */
+  var current = null, sheetSeq = 0;
+  function openSheet(name, info){
+    current = {name:name, category: info && info.category in CAT ? info.category : null, post_count: info ? info.post_count : null, exists: !!info};
+    var my = ++sheetSeq;
+    $("scrim").hidden = $("sheet").hidden = false;
+    document.body.style.overflow="hidden";
+    renderSheetHead();
+    renderSheetActions();
+    $("s-names-wrap").hidden = true;
+    $("s-wiki").innerHTML = '<p class="empty-wiki">読み込み中…</p>';
+    $("sheet").querySelector(".sheet-body").scrollTop = 0;
+
+    if (!info){
+      getJSON("/tags.json?search[name]=" + encodeURIComponent(name) + "&limit=1").then(function(rows){
+        if (my!==sheetSeq) return;
+        if (rows && rows[0]){ current.category=rows[0].category; current.post_count=rows[0].post_count; current.exists=true; }
+        renderSheetHead(); renderSheetActions();
+      }).catch(function(){});
+    }
+    getJSON("/wiki_pages.json?search[title]=" + encodeURIComponent(name) + "&limit=1").then(function(rows){
+      if (my!==sheetSeq) return;
+      var w = rows && rows[0];
+      var names = w && w.other_names ? w.other_names : [];
+      $("s-names").innerHTML = names.map(function(n){ return "<span>"+esc(n)+"</span>"; }).join("");
+      $("s-names-wrap").hidden = !names.length;
+      if (w && w.body && w.body.trim()){
+        $("s-wiki").innerHTML = dtext(w.body);
+        current.wikiText = w.body;
+      } else {
+        $("s-wiki").innerHTML = '<p class="empty-wiki">このタグにはまだ説明がありません。</p>';
+        current.wikiText = "";
+      }
+      renderSheetActions();
+    }).catch(function(){
+      if (my!==sheetSeq) return;
+      $("s-wiki").innerHTML = '<p class="empty-wiki">説明を読み込めませんでした。通信状態を確認してください。</p>';
+    });
+  }
+  function renderSheetHead(){
+    var c = current.category;
+    $("s-title").textContent = display(current.name);
+    $("s-title").parentNode.className = "t" + (c!==null ? " k"+c : "");
+    $("s-meta").innerHTML = c!==null
+      ? '<span class="cat">'+CAT[c]+'</span><span class="count">'+fmtCount(current.post_count||0)+' 件</span>'
+      : "";
+  }
+  function renderSheetActions(){
+    var a = $("s-actions"), on = isPicked(current.name), html = "";
+    if (current.exists) html += '<button class="btn btn-primary" type="button" data-act="add">'+(on?"✓ 追加済み（外す）":"＋ 選んだタグに追加")+'</button>';
+    html += '<button class="btn btn-line" type="button" data-act="copy">このタグをコピー</button>';
+    html += '<a class="btn btn-line" href="'+API+'/wiki_pages/'+encodeURIComponent(current.name)+'" target="_blank" rel="noopener">Danbooruで開く</a>';
+    if (current.wikiText){
+      var plain = current.wikiText.replace(/\[\[([^\]|]+)\|([^\]]*)\]\]/g,"$2").replace(/\[\[([^\]]+)\]\]/g,"$1").replace(/\[\/?[a-z]+(=[^\]]*)?\]/gi,"").slice(0, 4500);
+      html += '<a class="btn btn-line" href="https://translate.google.com/?sl=en&tl=ja&op=translate&text='+encodeURIComponent(plain)+'" target="_blank" rel="noopener">日本語に翻訳</a>';
+    }
+    a.innerHTML = html;
+  }
+  $("s-actions").addEventListener("click", function(e){
+    var b = e.target.closest("[data-act]"); if(!b) return;
+    if (b.dataset.act==="add") toggle(current.name, current.category===null?0:current.category);
+    if (b.dataset.act==="copy") copyText(forNai(current.name), "「"+forNai(current.name)+"」をコピーしました");
+  });
+  $("s-wiki").addEventListener("click", function(e){
+    var l = e.target.closest("a[data-tag]"); if(!l) return;
+    e.preventDefault(); openSheet(l.dataset.tag, null);
+  });
+  function closeSheet(){ $("scrim").hidden = $("sheet").hidden = true; document.body.style.overflow=""; sheetSeq++; }
+  $("s-close").addEventListener("click", closeSheet);
+  $("scrim").addEventListener("click", closeSheet);
+  document.addEventListener("keydown", function(e){ if (e.key==="Escape" && !$("sheet").hidden) closeSheet(); });
+
+  renderTray();
+  window.addEventListener("resize", renderTray);
+  window.__dtd = {forNai:forNai, dtext:dtext, fmtCount:fmtCount}; // for testing
+})();
+</script>
+</body>
+</html>
