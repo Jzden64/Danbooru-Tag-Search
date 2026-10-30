@@ -7,5 +7,3 @@ Danbooruのタグを検索して、説明（Wiki）を読めるスマホ向けWe
 - 選んだタグの並び替え・直接編集・名前を付けて保存
 - `||A|B|C||` 形式のランダム枠を作成
 - アンダーバーをスペースに変えてコピー
-
-公開ページ: https://jzden64.github.io/danbooru-tag-search/
